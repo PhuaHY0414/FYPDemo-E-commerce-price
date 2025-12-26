@@ -77,7 +77,7 @@ def download_model_from_drive():
         return True
     
     # Google Drive file ID from your link
-    file_id = '1bMOEUXzqzB0zxj0iKYr4HajE0HPRk6MW'
+    file_id = '1P51FTpCvxZMydx1pKmWU-ec2RO4oek72'
     url = f'https://drive.google.com/uc?id={file_id}'
     
     try:
@@ -110,63 +110,63 @@ def load_model():
         model_exists = download_model_from_drive()
         
         # Try to load the trained model
-        if model_exists:
-            try:
-                model = joblib.load('tuned_random_forest_model.pkl')
-                demo_mode = False
-            except Exception as e:
-                st.warning(f"⚠️ Error loading model: {str(e)} - Running in DEMO MODE")
-                model = None
-                demo_mode = True
-        else:
-            st.warning("⚠️ Model file not available - Running in DEMO MODE")
-            model = None
-            demo_mode = True
+        if not model_exists:
+            st.error("❌ Model file could not be downloaded. Please check your internet connection and Google Drive permissions.")
+            st.stop()
         
-        # Create preprocessor EXACTLY from notebook (ACopy_of_FYP2025.ipynb line 261-295)
-        # Must match the 19 columns used in training!
-        categorical_cols = ['payment_type', 'order_status', 'customer_state', 
-                          'seller_state', 'product_category_name_english']
-        numerical_cols = ['payment_sequential', 'payment_installments', 'payment_value',
-                        'product_weight_g', 'product_length_cm', 'product_height_cm',
-                        'product_width_cm', 'product_description_lenght', 'product_photos_qty',
-                        'product_name_lenght', 'customer_zip_code_prefix', 'seller_zip_code_prefix',
-                        'review_score', 'review_comment_title_length']
+        try:
+            model_package = joblib.load('tuned_random_forest_model.pkl')
+            
+            # Check if it's a dictionary with model + preprocessor
+            if isinstance(model_package, dict):
+                model = model_package.get('model')
+                preprocessor = model_package.get('preprocessor')
+                feature_names = model_package.get('selected_features', None)
+                
+                if model is None:
+                    st.error("❌ Model not found in the package file. Please re-save the model correctly.")
+                    st.stop()
+                    
+                if preprocessor is None:
+                    st.error("❌ Preprocessor not found in the package file. Please re-save with preprocessor included.")
+                    st.stop()
+                
+                # If selected_features not in package, use the hardcoded ones from notebook
+                if feature_names is None:
+                    st.warning("⚠️ Selected features not in model package. Using default 10 features from notebook.")
+                    feature_names = [
+                        'num__payment_value',
+                        'num__product_weight_g',
+                        'num__payment_installments',
+                        'num__product_height_cm',
+                        'num__product_width_cm',
+                        'num__product_length_cm',
+                        'num__product_description_lenght',
+                        'cat__seller_state_SP',
+                        'cat__product_category_name_english_watches_gifts',
+                        'cat__product_category_name_english_telephony'
+                    ]
+            else:
+                st.error("❌ Invalid model file format. Expected dictionary with 'model' and 'preprocessor' keys.")
+                st.stop()
+                
+        except Exception as e:
+            st.error(f"❌ Error loading model: {str(e)}")
+            st.error("Please ensure the model file is saved correctly as: {'model': model, 'preprocessor': preprocessor, 'selected_features': feature_list}")
+            import traceback
+            st.error(traceback.format_exc())
+            st.stop()
         
-        preprocessor = ColumnTransformer(
-            transformers=[
-                ('cat', OneHotEncoder(handle_unknown='ignore'), categorical_cols),
-                ('num', 'passthrough', numerical_cols)
-            ],
-            remainder='drop'
-        )
+        # If preprocessor not loaded, create and fit with dummy data
+        # If preprocessor not loaded, create and fit with dummy data
+        if preprocessor is None:
+            st.error("❌ Preprocessor not found in model file. Please re-save the model with preprocessor included.")
+            st.stop()
         
-        # FIT the preprocessor with dummy data to initialize it
-        dummy_data = pd.DataFrame({
-            'payment_type': ['credit_card'],
-            'order_status': ['delivered'],
-            'customer_state': ['SP'],
-            'seller_state': ['SP'],
-            'product_category_name_english': ['electronics'],
-            'payment_sequential': [1],
-            'payment_installments': [1],
-            'payment_value': [100.0],
-            'product_weight_g': [500],
-            'product_length_cm': [20],
-            'product_height_cm': [10],
-            'product_width_cm': [15],
-            'product_description_lenght': [500],
-            'product_photos_qty': [1],
-            'product_name_lenght': [50],
-            'customer_zip_code_prefix': [1000],
-            'seller_zip_code_prefix': [1000],
-            'review_score': [4],
-            'review_comment_title_length': [0]
-        })
-        preprocessor.fit(dummy_data)
-        
-        # EXACT final features from notebook output (line 583-603)
-        # Selected at least 2 times from 3 methods
+        # EXACT final features from notebook - the 10 features used in training
+        # These match your hybrid feature selection output
+        # EXACT final features from notebook - the 10 features used in training
+        # These match your hybrid feature selection output
         feature_names = [
             'num__payment_value',
             'num__product_weight_g',
@@ -176,8 +176,8 @@ def load_model():
             'num__product_length_cm',
             'num__product_description_lenght',
             'cat__seller_state_SP',
-            'cat__product_category_name_english_telephony',
-            'cat__product_category_name_english_watches_gifts'
+            'cat__product_category_name_english_watches_gifts',
+            'cat__product_category_name_english_telephony'
         ]
         
         return model, preprocessor, feature_names
@@ -381,15 +381,8 @@ def create_dashboard():
 def predict_price(model, preprocessor, feature_names, input_data):
     """Make prediction using the model - EXACTLY matching notebook preprocessing"""
     try:
-        # DEMO MODE - Return sample prediction if no model
-        if model is None:
-            import random
-            base_price = input_data.get('payment_value', 100)
-            demo_prediction = base_price * random.uniform(0.8, 1.2)
-            return demo_prediction
-        
         # Store original category and payment type for dashboard tracking
-        original_category = input_data.get('product_category_name', 'Unknown')
+        original_category = input_data.get('product_category_name_english', input_data.get('product_category_name', 'Unknown'))
         original_payment = input_data.get('payment_type', 'Unknown')
         
         # REAL MODE - Use actual model with EXACT preprocessing from notebook
@@ -411,18 +404,20 @@ def predict_price(model, preprocessor, feature_names, input_data):
             if col not in input_df.columns:
                 input_df[col] = default_val
         
-        # Transform using preprocessor (creates 143 encoded features)
+        # Transform using preprocessor (creates encoded features from the 19 input columns)
         X_encoded = preprocessor.transform(input_df)
         
-        # Select ONLY the 10 final features (matching notebook line 583-603)
-        all_feature_names = preprocessor.get_feature_names_out()
-        feature_indices = [i for i, feat in enumerate(all_feature_names) if feat in feature_names]
+        # Get all feature names after encoding
+        all_feature_names = list(preprocessor.get_feature_names_out())
         
-        if len(feature_indices) != 10:
-            st.warning(f"⚠️ Expected 10 features, found {len(feature_indices)}. Using all available.")
-            X_final = X_encoded
-        else:
-            X_final = X_encoded[:, feature_indices]
+        # Extract the EXACT 10 features needed by the model
+        X_final = np.zeros((1, 10))  # Initialize with zeros
+        
+        for i, feat_name in enumerate(feature_names):
+            if feat_name in all_feature_names:
+                feat_idx = all_feature_names.index(feat_name)
+                X_final[0, i] = X_encoded[0, feat_idx]
+            # If feature doesn't exist (e.g., seller not in SP, category not watches/telephony), it stays 0
         
         # Make prediction
         prediction = model.predict(X_final)
@@ -617,14 +612,11 @@ def manual_input_form(model, preprocessor, feature_names, categories):
                 prediction = predict_price(model, preprocessor, feature_names, input_data)
             
             if prediction is not None:
-                # Check if in demo mode
-                demo_badge = " (DEMO)" if model is None else ""
-                
                 st.markdown(f"""
                     <div class="prediction-result">
-                        <h2>💰 Predicted Price{demo_badge}</h2>
+                        <h2>💰 Predicted Price</h2>
                         <h1>R$ {prediction:.2f}</h1>
-                        <p>{'⚠️ Demo Mode - Train model for real predictions' if model is None else 'Confidence: High ✅'}</p>
+                        <p>Confidence: High ✅</p>
                     </div>
                 """, unsafe_allow_html=True)
                 
@@ -768,12 +760,9 @@ def main():
     model, preprocessor, feature_names = load_model()
     categories = load_categories()
     
-    # Show demo mode banner if no model
-    if model is None:
-        st.info("🎨 **DEMO MODE** - You can explore the full UI! Train your model to enable real predictions.")
-    
-    if preprocessor is None:
-        st.error("❌ Failed to initialize. Please check the error messages above.")
+    # Model and preprocessor are required - no demo mode
+    if model is None or preprocessor is None:
+        st.error("❌ Failed to load model. Please check the error messages above.")
         return
     
     # Sidebar
