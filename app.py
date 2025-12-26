@@ -141,6 +141,30 @@ def load_model():
             remainder='drop'
         )
         
+        # FIT the preprocessor with dummy data to initialize it
+        dummy_data = pd.DataFrame({
+            'payment_type': ['credit_card'],
+            'order_status': ['delivered'],
+            'customer_state': ['SP'],
+            'seller_state': ['SP'],
+            'product_category_name_english': ['electronics'],
+            'payment_sequential': [1],
+            'payment_installments': [1],
+            'payment_value': [100.0],
+            'product_weight_g': [500],
+            'product_length_cm': [20],
+            'product_height_cm': [10],
+            'product_width_cm': [15],
+            'product_description_lenght': [500],
+            'product_photos_qty': [1],
+            'product_name_lenght': [50],
+            'customer_zip_code_prefix': [1000],
+            'seller_zip_code_prefix': [1000],
+            'review_score': [4],
+            'review_comment_title_length': [0]
+        })
+        preprocessor.fit(dummy_data)
+        
         # EXACT final features from notebook output (line 583-603)
         # Selected at least 2 times from 3 methods
         feature_names = [
