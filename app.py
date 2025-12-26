@@ -82,12 +82,21 @@ def download_model_from_drive():
     
     try:
         st.info("⏳ Downloading model from Google Drive... (this may take a minute)")
-        gdown.download(url, model_path, quiet=False)
-        st.success("✅ Model downloaded successfully!")
-        return True
+        # Use fuzzy=True to handle Google Drive download page
+        output = gdown.download(url, model_path, quiet=False, fuzzy=True)
+        
+        # Check if file actually exists after download
+        if output and os.path.exists(model_path):
+            file_size = os.path.getsize(model_path) / (1024 * 1024)  # MB
+            st.success(f"✅ Model downloaded successfully! ({file_size:.1f} MB)")
+            return True
+        else:
+            st.error("❌ Download failed - file not created")
+            st.info("💡 Manual download: https://drive.google.com/file/d/1bMOEUXzqzB0zxj0iKYr4HajE0HPRk6MW/view")
+            return False
     except Exception as e:
-        st.error(f"❌ Failed to download model: {str(e)}")
-        st.info("💡 You can manually download from: https://drive.google.com/file/d/1bMOEUXzqzB0zxj0iKYr4HajE0HPRk6MW/view")
+        st.error(f"❌ Download error: {str(e)}")
+        st.info("💡 Manual download: https://drive.google.com/file/d/1bMOEUXzqzB0zxj0iKYr4HajE0HPRk6MW/view")
         return False
 
 # Load the model (with auto-download from Google Drive)
