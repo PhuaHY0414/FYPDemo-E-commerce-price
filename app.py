@@ -16,6 +16,12 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Initialize session state for tracking predictions
+if 'predictions_history' not in st.session_state:
+    st.session_state.predictions_history = []
+if 'total_predictions' not in st.session_state:
+    st.session_state.total_predictions = 0
+
 # Custom CSS for better UI
 st.markdown("""
     <style>
@@ -181,89 +187,163 @@ def load_categories():
         ]
     }
 
-def create_dashboard(df=None):
-    """Create analytics dashboard"""
+def create_dashboard():
+    """Create dynamic analytics dashboard with real prediction data"""
     st.markdown("## 📊 Analytics Dashboard")
     
+    # Get prediction history from session state
+    predictions = st.session_state.predictions_history
+    
+    # Check if we have any predictions
+    if len(predictions) == 0:
+        st.info("📝 **No predictions yet!** Use Manual Input or CSV Upload to generate predictions. The dashboard will update automatically.")
+        
+        # Show placeholder metrics
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.markdown("""
+                <div class="metric-card">
+                    <h3>📦 Total Predictions</h3>
+                    <h2>0</h2>
+                    <p>Start predicting!</p>
+                </div>
+            """, unsafe_allow_html=True)
+        with col2:
+            st.markdown("""
+                <div class="metric-card">
+                    <h3>💰 Avg Price</h3>
+                    <h2>-</h2>
+                    <p>No data yet</p>
+                </div>
+            """, unsafe_allow_html=True)
+        with col3:
+            st.markdown("""
+                <div class="metric-card">
+                    <h3>📈 Highest Price</h3>
+                    <h2>-</h2>
+                    <p>No data yet</p>
+                </div>
+            """, unsafe_allow_html=True)
+        with col4:
+            st.markdown("""
+                <div class="metric-card">
+                    <h3>📉 Lowest Price</h3>
+                    <h2>-</h2>
+                    <p>No data yet</p>
+                </div>
+            """, unsafe_allow_html=True)
+        return
+    
+    # Convert predictions to DataFrame for analysis
+    df = pd.DataFrame(predictions)
+    
+    # Calculate real statistics
+    total_preds = len(predictions)
+    avg_price = df['predicted_price'].mean()
+    max_price = df['predicted_price'].max()
+    min_price = df['predicted_price'].min()
+    total_value = df['predicted_price'].sum()
+    
+    # Display real metrics
     col1, col2, col3, col4 = st.columns(4)
     
-    # Sample statistics (replace with actual data if available)
     with col1:
-        st.markdown("""
+        st.markdown(f"""
             <div class="metric-card">
-                <h3>📦 Total Orders</h3>
-                <h2>112,650</h2>
-                <p>Processed orders</p>
+                <h3>📦 Total Predictions</h3>
+                <h2>{total_preds:,}</h2>
+                <p>This session</p>
             </div>
         """, unsafe_allow_html=True)
     
     with col2:
-        st.markdown("""
+        st.markdown(f"""
             <div class="metric-card">
                 <h3>💰 Avg Price</h3>
-                <h2>R$ 120.65</h2>
-                <p>Per transaction</p>
+                <h2>R$ {avg_price:.2f}</h2>
+                <p>Mean prediction</p>
             </div>
         """, unsafe_allow_html=True)
     
     with col3:
-        st.markdown("""
+        st.markdown(f"""
             <div class="metric-card">
-                <h3>🎯 Model Accuracy</h3>
-                <h2>86.5%</h2>
-                <p>R² Score</p>
+                <h3>📈 Highest Price</h3>
+                <h2>R$ {max_price:.2f}</h2>
+                <p>Maximum</p>
             </div>
         """, unsafe_allow_html=True)
     
     with col4:
-        st.markdown("""
+        st.markdown(f"""
             <div class="metric-card">
-                <h3>🔄 Predictions</h3>
-                <h2>1,245</h2>
-                <p>This month</p>
+                <h3>💵 Total Value</h3>
+                <h2>R$ {total_value:.2f}</h2>
+                <p>Sum of all</p>
             </div>
         """, unsafe_allow_html=True)
     
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # Create sample visualizations
+    # Create real visualizations from actual data
     col1, col2 = st.columns(2)
     
     with col1:
-        # Sample category distribution
-        categories_data = pd.DataFrame({
-            'Category': ['Electronics', 'Fashion', 'Home', 'Beauty', 'Sports'],
-            'Count': [3200, 2800, 2100, 1900, 1500]
-        })
-        fig1 = px.bar(categories_data, x='Category', y='Count', 
-                     title='Top Product Categories',
-                     color='Count',
-                     color_continuous_scale='Blues')
-        fig1.update_layout(showlegend=False)
-        st.plotly_chart(fig1, use_container_width=True)
+        # Category distribution from real predictions
+        if 'category' in df.columns:
+            category_counts = df['category'].value_counts().head(5)
+            fig1 = px.bar(
+                x=category_counts.index, 
+                y=category_counts.values,
+                title='Top 5 Product Categories (Your Predictions)',
+                labels={'x': 'Category', 'y': 'Count'},
+                color=category_counts.values,
+                color_continuous_scale='Blues'
+            )
+            fig1.update_layout(showlegend=False)
+            st.plotly_chart(fig1, use_container_width=True)
+        else:
+            # Fallback if category not tracked
+            st.info("📊 Category distribution will appear here after predictions include category data")
     
     with col2:
-        # Sample payment distribution
-        payment_data = pd.DataFrame({
-            'Payment Type': ['Credit Card', 'Boleto', 'Debit Card', 'Voucher'],
-            'Percentage': [73, 19, 5, 3]
-        })
-        fig2 = px.pie(payment_data, values='Percentage', names='Payment Type',
-                     title='Payment Methods Distribution',
-                     color_discrete_sequence=px.colors.sequential.RdBu)
-        st.plotly_chart(fig2, use_container_width=True)
+        # Payment type distribution from real predictions
+        if 'payment_type' in df.columns:
+            payment_counts = df['payment_type'].value_counts()
+            fig2 = px.pie(
+                names=payment_counts.index,
+                values=payment_counts.values,
+                title='Payment Methods Used',
+                color_discrete_sequence=px.colors.sequential.RdBu
+            )
+            st.plotly_chart(fig2, use_container_width=True)
+        else:
+            # Fallback if payment type not tracked
+            st.info("💳 Payment distribution will appear here after predictions include payment data")
     
-    # Price trend
-    dates = pd.date_range(start='2024-01-01', periods=12, freq='M')
-    price_trend = pd.DataFrame({
-        'Month': dates,
-        'Avg Price': [115, 118, 122, 119, 125, 128, 130, 127, 124, 121, 120, 123]
-    })
-    fig3 = px.line(price_trend, x='Month', y='Avg Price',
-                  title='Average Price Trend',
-                  markers=True)
-    fig3.update_traces(line_color='#1f77b4', line_width=3)
+    # Price distribution histogram
+    fig3 = px.histogram(
+        df, 
+        x='predicted_price',
+        nbins=20,
+        title='Distribution of Predicted Prices',
+        labels={'predicted_price': 'Price (R$)'},
+        color_discrete_sequence=['#1f77b4']
+    )
+    fig3.update_layout(showlegend=False)
     st.plotly_chart(fig3, use_container_width=True)
+    
+    # Recent predictions table
+    st.markdown("### 📋 Recent Predictions")
+    recent_df = df.tail(10).copy()
+    recent_df['predicted_price'] = recent_df['predicted_price'].apply(lambda x: f"R$ {x:.2f}")
+    st.dataframe(recent_df, use_container_width=True)
+    
+    # Clear history button
+    if st.button("🗑️ Clear Prediction History"):
+        st.session_state.predictions_history = []
+        st.session_state.total_predictions = 0
+        st.rerun()
 
 def predict_price(model, preprocessor, feature_names, input_data):
     """Make prediction using the model - EXACTLY matching notebook preprocessing"""
@@ -274,6 +354,10 @@ def predict_price(model, preprocessor, feature_names, input_data):
             base_price = input_data.get('payment_value', 100)
             demo_prediction = base_price * random.uniform(0.8, 1.2)
             return demo_prediction
+        
+        # Store original category and payment type for dashboard tracking
+        original_category = input_data.get('product_category_name', 'Unknown')
+        original_payment = input_data.get('payment_type', 'Unknown')
         
         # REAL MODE - Use actual model with EXACT preprocessing from notebook
         # Create DataFrame from input
@@ -309,6 +393,18 @@ def predict_price(model, preprocessor, feature_names, input_data):
         
         # Make prediction
         prediction = model.predict(X_final)
+        
+        # Store prediction in session state for dashboard tracking
+        prediction_record = {
+            'predicted_price': float(prediction[0]),
+            'category': original_category,
+            'payment_type': original_payment,
+            'payment_value': float(input_data.get('payment_value', 0)),
+            'timestamp': pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+        
+        st.session_state.predictions_history.append(prediction_record)
+        st.session_state.total_predictions += 1
         
         return prediction[0]
     except Exception as e:
